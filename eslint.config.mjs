@@ -26,10 +26,27 @@ export default tseslint.config(
   },
   {
     rules: {
+      // ── 'any' type rules ─────────────────────────────────────────────────────
+      // We use 'any' intentionally in this project to keep the code simple and
+      // beginner-friendly. These rules are turned off to allow that.
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+
+      // ── Unused variables ─────────────────────────────────────────────────────
+      // Unused imports/variables cause errors — turn into warnings so they
+      // don't block commits but still show up as hints in your editor.
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+
+      // ── Promises ─────────────────────────────────────────────────────────────
+      // Forgetting to await a promise is a common bug — keep as a warning.
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+
+      // ── Prettier formatting ───────────────────────────────────────────────────
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
 );

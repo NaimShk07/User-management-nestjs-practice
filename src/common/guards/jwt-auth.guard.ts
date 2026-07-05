@@ -38,7 +38,7 @@ export class JwtAuthGuard implements CanActivate {
       // Attach the decoded user info to the request so controllers can use it later
       request['user'] = decoded;
       return true; // allow the request
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Token is invalid or has expired.');
     }
   }

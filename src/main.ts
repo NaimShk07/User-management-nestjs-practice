@@ -49,4 +49,4 @@ async function bootstrap() {
     `🚀 Server running on http://localhost:${process.env.PORT ?? 3000}`,
   );
 }
-bootstrap();
+void bootstrap();
