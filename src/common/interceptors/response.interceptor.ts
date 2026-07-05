@@ -1,4 +1,9 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -17,7 +22,7 @@ export class ResponseInterceptor implements NestInterceptor {
       map((data) => ({
         statusCode: response.statusCode, // e.g. 200, 201
         message: 'Success',
-        data: data,               // the actual data returned by the controller
+        data: data, // the actual data returned by the controller
       })),
     );
   }

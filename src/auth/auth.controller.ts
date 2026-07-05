@@ -1,5 +1,6 @@
 import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler'; // lets us set a custom limit per route
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -22,6 +23,9 @@ export class AuthController {
 
   // ── POST /auth/login ────────────────────────────────────────────────────────
   // Public — anyone can call this
+  // @Throttle overrides the global limit for this specific route:
+  // max 5 login attempts per minute per IP — prevents brute force password guessing
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   login(@Body() body: LoginDto, @Res({ passthrough: true }) res: Response) {
     return this.authService.login(body, res);

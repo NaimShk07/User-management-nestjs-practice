@@ -12,9 +12,9 @@ export class DatabaseService implements OnModuleInit {
   constructor(private configService: ConfigService) {
     // Create the pool when the service is first created
     this.pool = createPool({
-      host:     this.configService.get('DB_HOST', 'localhost'),
-      port:     this.configService.get<number>('DB_PORT', 3306),
-      user:     this.configService.get('DB_USERNAME', 'root'),
+      host: this.configService.get('DB_HOST', 'localhost'),
+      port: this.configService.get<number>('DB_PORT', 3306),
+      user: this.configService.get('DB_USERNAME', 'root'),
       password: this.configService.get('DB_PASSWORD', ''),
       database: this.configService.get('DB_NAME', 'user_management'),
       connectionLimit: 10, // max 10 parallel connections

@@ -42,7 +42,7 @@ export class AuthService {
   private setRefreshTokenCookie(res: Response, token: string): void {
     res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: false,        // ⚠️ set to true in production
+      secure: false, // ⚠️ set to true in production
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
     });
@@ -125,7 +125,9 @@ export class AuthService {
     // Step 1: Read the refresh token from the cookie
     const tokenFromCookie = req.cookies?.refresh_token;
     if (!tokenFromCookie) {
-      throw new UnauthorizedException('No refresh token found. Please login again.');
+      throw new UnauthorizedException(
+        'No refresh token found. Please login again.',
+      );
     }
 
     // Step 2: Verify the token is valid (not tampered with or expired)
@@ -133,7 +135,9 @@ export class AuthService {
     try {
       payload = this.jwtService.verify(tokenFromCookie);
     } catch {
-      throw new UnauthorizedException('Refresh token is invalid or has expired. Please login again.');
+      throw new UnauthorizedException(
+        'Refresh token is invalid or has expired. Please login again.',
+      );
     }
 
     // Step 3: Find the user in the database
@@ -143,7 +147,9 @@ export class AuthService {
     // This is important — if the user logged out, we cleared the DB token,
     // so an old cookie won't work anymore.
     if (!user || user.refresh_token !== tokenFromCookie) {
-      throw new UnauthorizedException('Refresh token has been revoked. Please login again.');
+      throw new UnauthorizedException(
+        'Refresh token has been revoked. Please login again.',
+      );
     }
 
     // Step 5: Issue a brand new access token AND refresh token (called "token rotation").

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -22,8 +23,8 @@ import { UsersModule } from './users/users.module';
     // If a client exceeds this, they get a 429 Too Many Requests error.
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,  // 1 minute (in milliseconds)
-        limit: 20,   // max requests per ttl window
+        ttl: 60000, // 1 minute (in milliseconds)
+        limit: 20, // max requests per ttl window
       },
     ]),
 
@@ -45,10 +46,18 @@ import { UsersModule } from './users/users.module';
 
     // ── Feature Modules ───────────────────────────────────────────────────────
     DatabaseModule, // MySQL connection pool
-    UsersModule,    // /users routes
-    AuthModule,     // /auth routes (signup, login, refresh, logout)
+    UsersModule, // /users routes
+    AuthModule, // /auth routes (signup, login, refresh, logout)
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Register ThrottlerGuard globally — every route is now rate-limited
+    // Individual routes can override the limit using @Throttle() decorator
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

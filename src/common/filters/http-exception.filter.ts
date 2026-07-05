@@ -1,4 +1,10 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 
 // @Catch() with no arguments means: catch ALL errors (not just HttpExceptions)
@@ -37,7 +43,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(statusCode).json({
       statusCode,
       message,
-      path: request.url,          // which route caused the error
+      path: request.url, // which route caused the error
       timestamp: new Date().toISOString(),
     });
   }

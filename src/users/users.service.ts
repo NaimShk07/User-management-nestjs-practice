@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -64,10 +69,9 @@ export class UsersService implements OnModuleInit {
 
   async findOne(id: number) {
     // query() returns an array — we take the first element
-    const [user] = await this.db.query(
-      'SELECT * FROM users WHERE id = ?',
-      [id],
-    );
+    const [user] = await this.db.query('SELECT * FROM users WHERE id = ?', [
+      id,
+    ]);
 
     if (!user) {
       // 404 Not Found
@@ -80,10 +84,9 @@ export class UsersService implements OnModuleInit {
   // ── GET one user by email (used during login) ─────────────────────────────
 
   async findByEmail(email: string) {
-    const [user] = await this.db.query(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
-    );
+    const [user] = await this.db.query('SELECT * FROM users WHERE email = ?', [
+      email,
+    ]);
     return user ?? null; // return null if not found
   }
 
@@ -95,13 +98,25 @@ export class UsersService implements OnModuleInit {
 
     // Build the SET part of the query dynamically.
     // We only update the fields that were actually sent in the request.
-    const fields: string[] = [];  // e.g. ['name = ?', 'email = ?']
-    const values: any[]    = [];  // e.g. ['John', 'john@example.com']
+    const fields: string[] = []; // e.g. ['name = ?', 'email = ?']
+    const values: any[] = []; // e.g. ['John', 'john@example.com']
 
-    if (dto.name     !== undefined) { fields.push('name = ?');     values.push(dto.name);     }
-    if (dto.email    !== undefined) { fields.push('email = ?');    values.push(dto.email);    }
-    if (dto.password !== undefined) { fields.push('password = ?'); values.push(dto.password); }
-    if (dto.role     !== undefined) { fields.push('role = ?');     values.push(dto.role);     }
+    if (dto.name !== undefined) {
+      fields.push('name = ?');
+      values.push(dto.name);
+    }
+    if (dto.email !== undefined) {
+      fields.push('email = ?');
+      values.push(dto.email);
+    }
+    if (dto.password !== undefined) {
+      fields.push('password = ?');
+      values.push(dto.password);
+    }
+    if (dto.role !== undefined) {
+      fields.push('role = ?');
+      values.push(dto.role);
+    }
 
     // If nothing was sent, just return the user as-is
     if (fields.length === 0) {
@@ -123,10 +138,10 @@ export class UsersService implements OnModuleInit {
   async updateRefreshToken(id: number, refreshToken: string | null) {
     await this.findOne(id); // throws 404 if user doesn't exist
 
-    await this.db.execute(
-      'UPDATE users SET refresh_token = ? WHERE id = ?',
-      [refreshToken, id],
-    );
+    await this.db.execute('UPDATE users SET refresh_token = ? WHERE id = ?', [
+      refreshToken,
+      id,
+    ]);
   }
 
   // ── DELETE a user ─────────────────────────────────────────────────────────

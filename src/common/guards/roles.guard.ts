@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 // The RolesGuard checks if the logged-in user has the right ROLE to access a route.
@@ -18,7 +23,10 @@ export class RolesGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     // Step 1: Read the required roles from the @Roles() decorator on this route
     // e.g. if the route has @Roles('admin'), requiredRoles = ['admin']
-    const requiredRoles = this.reflector.get<string[]>('roles', context.getHandler());
+    const requiredRoles = this.reflector.get<string[]>(
+      'roles',
+      context.getHandler(),
+    );
 
     // Step 2: If no @Roles() decorator was used, everyone with a valid token can access it
     if (!requiredRoles || requiredRoles.length === 0) {

@@ -14,6 +14,7 @@ lerna-debug.log*
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Tests
 /coverage
@@ -36,6 +37,7 @@ lerna-debug.log*
 !.vscode/extensions.json
 
 # dotenv environment variable files
+# .env contains secrets (DB password, JWT secret) — NEVER commit it
 .env
 .env.development.local
 .env.test.local
@@ -54,3 +56,22 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ── Added for this project ─────────────────────────────────────────────────────
+
+# Migration notes (internal planning doc, not needed in repo history)
+# Comment this line out if you want to keep migration.md tracked
+# migration.md
+
+# macOS extended attributes folder
+__MACOSX
+
+# TypeScript incremental build info (auto-generated, not needed in git)
+*.tsbuildinfo
+
+# Nest CLI cache
+.nest
+
+# Optional: keep .env.example tracked so teammates know what vars are needed
+# (make sure .env.example has NO real secrets — only placeholder values)
+!.env.example

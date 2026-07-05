@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const cookieParser = require('cookie-parser'); // reads cookies from requests
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const helmet = require('helmet');               // adds secure HTTP headers automatically
+const helmet = require('helmet'); // adds secure HTTP headers automatically
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -22,7 +22,7 @@ async function bootstrap() {
   // credentials: true is needed so the browser sends cookies (refresh token).
   app.enableCors({
     origin: 'http://localhost:5173', // your frontend URL (change if needed)
-    credentials: true,               // allow cookies to be sent
+    credentials: true, // allow cookies to be sent
   });
 
   // ── Cookie Parser ────────────────────────────────────────────────────────────
@@ -45,6 +45,8 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log(`🚀 Server running on http://localhost:${process.env.PORT ?? 3000}`);
+  console.log(
+    `🚀 Server running on http://localhost:${process.env.PORT ?? 3000}`,
+  );
 }
 bootstrap();
