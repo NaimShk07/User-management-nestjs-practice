@@ -16,20 +16,43 @@ export class UsersService implements OnModuleInit {
   constructor(private db: DatabaseService) {}
 
   // This runs automatically when the app starts.
-  // It creates the users table if it doesn't already exist.
+  // It creates the users table if it doesn't already exist,
+  // then safely adds the google_id column for Google OAuth users.
   async onModuleInit() {
+    // Create the table on first run.
+    // password is NULL because Google users don't have a password.
     await this.db.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id            INT AUTO_INCREMENT PRIMARY KEY,
         name          VARCHAR(100)         NOT NULL,
         email         VARCHAR(150)         NOT NULL UNIQUE,
-        password      VARCHAR(255)         NOT NULL,
+        password      VARCHAR(255)         NULL,        -- NULL for Google OAuth users
+        google_id     VARCHAR(255)         NULL UNIQUE, -- Google's unique user ID
         role          ENUM('admin','user') NOT NULL DEFAULT 'user',
         refresh_token TEXT                 NULL,
         created_at    TIMESTAMP            NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP            NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // If the table already existed (without google_id), add the column now.
+    // We wrap in try/catch because MySQL throws an error if the column already exists.
+    try {
+      await this.db.execute(
+        'ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE',
+      );
+    } catch {
+      // Column already exists — that's fine, nothing to do
+    }
+
+    // Also make password nullable for existing tables (needed for Google users)
+    try {
+      await this.db.execute(
+        'ALTER TABLE users MODIFY COLUMN password VARCHAR(255) NULL',
+      );
+    } catch {
+      // Already nullable — that's fine
+    }
   }
 
   // ── CREATE a new user ─────────────────────────────────────────────────────
@@ -152,5 +175,39 @@ export class UsersService implements OnModuleInit {
     await this.db.execute('DELETE FROM users WHERE id = ?', [id]);
 
     return { message: `User ${id} deleted successfully` };
+  }
+
+  // ── GOOGLE OAUTH HELPERS ───────────────────────────────────────────────────
+
+  // Find a user by their Google ID (used on repeat Google logins)
+  async findByGoogleId(googleId: string) {
+    const [user] = await this.db.query(
+      'SELECT * FROM users WHERE google_id = ?',
+      [googleId],
+    );
+    return user ?? null;
+  }
+
+  // Create a brand new user who signed up via Google.
+  // They don't have a password — their identity is verified by Google.
+  async createGoogleUser(data: {
+    googleId: string;
+    email: string;
+    name: string;
+  }) {
+    const result = await this.db.execute(
+      'INSERT INTO users (name, email, google_id) VALUES (?, ?, ?)',
+      [data.name, data.email, data.googleId],
+    );
+    return this.findOne(result.insertId);
+  }
+
+  // If a user already has a regular account (email/password) and then logs in
+  // with Google, link their Google ID to their existing account.
+  async linkGoogleId(userId: number, googleId: string) {
+    await this.db.execute('UPDATE users SET google_id = ? WHERE id = ?', [
+      googleId,
+      userId,
+    ]);
   }
 }

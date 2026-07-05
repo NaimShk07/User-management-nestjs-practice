@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { comparePassword, hashPassword } from '../common/utils/hash.helper';
 import { UsersService } from '../users/users.service';
@@ -12,6 +13,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   // ── Helper: Create a short-lived access token (15 minutes) ──────────────────
@@ -173,5 +175,52 @@ export class AuthService {
     res.clearCookie('refresh_token');
 
     return { message: 'Logged out successfully' };
+  }
+
+  // ── GOOGLE OAUTH ──────────────────────────────────────────────────────────────
+
+  // Called by GoogleStrategy.validate() after Google verifies the user.
+  // Finds the user in our DB, or creates them if it's their first time.
+  async findOrCreateGoogleUser(googleUser: {
+    googleId: string;
+    email: string;
+    name: string;
+  }) {
+    // Step 1: Have they logged in with Google before?
+    let user = await this.usersService.findByGoogleId(googleUser.googleId);
+
+    if (!user) {
+      // Step 2: Do they have a regular account with the same email?
+      user = await this.usersService.findByEmail(googleUser.email);
+
+      if (user) {
+        // They have an existing account — just link their Google ID to it
+        await this.usersService.linkGoogleId(user.id, googleUser.googleId);
+      } else {
+        // Brand new user — create their account (no password needed)
+        user = await this.usersService.createGoogleUser(googleUser);
+      }
+    }
+
+    return user; // this gets attached to req.user by Passport
+  }
+
+  // Called from the Google callback controller route.
+  // Generates tokens for the user and redirects them to the frontend.
+  async googleLogin(user: any, res: Response) {
+    const accessToken = this.createAccessToken(user);
+    const refreshToken = this.createRefreshToken(user.id);
+
+    await this.usersService.updateRefreshToken(user.id, refreshToken);
+    this.setRefreshTokenCookie(res, refreshToken);
+
+    // Redirect the browser to the frontend.
+    // The frontend reads the token from the URL and stores it (e.g. in localStorage).
+    // e.g. http://localhost:5173/auth/callback?token=eyJhbGc...
+    const frontendUrl = this.configService.get(
+      'FRONTEND_URL',
+      'http://localhost:5173',
+    );
+    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}`);
   }
 }

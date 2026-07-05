@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 
@@ -10,6 +11,9 @@ const mockUsersService = {
   findByEmail: jest.fn(),
   findOne: jest.fn(),
   updateRefreshToken: jest.fn(),
+  findByGoogleId: jest.fn(),
+  createGoogleUser: jest.fn(),
+  linkGoogleId: jest.fn(),
 };
 
 // Mock JwtService — we don't want real token generation (makes tests deterministic)
@@ -18,10 +22,16 @@ const mockJwtService = {
   verify: jest.fn(),
 };
 
+// Mock ConfigService
+const mockConfigService = {
+  get: jest.fn().mockReturnValue('http://localhost:5173'),
+};
+
 // Mock Express Response object (we only need the cookie method)
 const mockResponse = {
   cookie: jest.fn(),
   clearCookie: jest.fn(),
+  redirect: jest.fn(),
 };
 
 describe('AuthService', () => {
@@ -33,6 +43,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: UsersService, useValue: mockUsersService },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -149,6 +160,80 @@ describe('AuthService', () => {
       // Cookie should be cleared from browser
       expect(mockResponse.clearCookie).toHaveBeenCalledWith('refresh_token');
       expect(result.message).toContain('Logged out');
+    });
+  });
+
+  // ── TEST: Google OAuth ────────────────────────────────────────────────────
+  describe('Google OAuth', () => {
+    const googleUserPayload = {
+      googleId: 'google-12345',
+      email: 'google@test.com',
+      name: 'Google User',
+    };
+
+    it('should return user if google_id is already in DB', async () => {
+      const existingUser = {
+        id: 10,
+        email: 'google@test.com',
+        google_id: 'google-12345',
+      };
+      mockUsersService.findByGoogleId.mockResolvedValue(existingUser);
+
+      const result = await service.findOrCreateGoogleUser(googleUserPayload);
+
+      expect(result).toEqual(existingUser);
+      expect(mockUsersService.findByGoogleId).toHaveBeenCalledWith(
+        'google-12345',
+      );
+    });
+
+    it('should link google_id to existing user email if already in DB', async () => {
+      const regularUser = { id: 10, email: 'google@test.com', google_id: null };
+      mockUsersService.findByGoogleId.mockResolvedValue(null);
+      mockUsersService.findByEmail.mockResolvedValue(regularUser);
+      mockUsersService.linkGoogleId.mockResolvedValue(undefined);
+
+      const result = await service.findOrCreateGoogleUser(googleUserPayload);
+
+      expect(result).toEqual(regularUser);
+      expect(mockUsersService.linkGoogleId).toHaveBeenCalledWith(
+        10,
+        'google-12345',
+      );
+    });
+
+    it('should create new google user if google_id and email are not in DB', async () => {
+      const newUser = {
+        id: 11,
+        email: 'google@test.com',
+        google_id: 'google-12345',
+      };
+      mockUsersService.findByGoogleId.mockResolvedValue(null);
+      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockUsersService.createGoogleUser.mockResolvedValue(newUser);
+
+      const result = await service.findOrCreateGoogleUser(googleUserPayload);
+
+      expect(result).toEqual(newUser);
+      expect(mockUsersService.createGoogleUser).toHaveBeenCalledWith(
+        googleUserPayload,
+      );
+    });
+
+    it('should redirect to frontend URL with access token on googleLogin', async () => {
+      const user = { id: 10, email: 'google@test.com', role: 'user' };
+      mockUsersService.updateRefreshToken.mockResolvedValue(undefined);
+
+      await service.googleLogin(user, mockResponse as any);
+
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.any(String),
+        expect.any(Object),
+      );
+      expect(mockResponse.redirect).toHaveBeenCalledWith(
+        expect.stringContaining('http://localhost:5173/auth/callback?token='),
+      );
     });
   });
 });

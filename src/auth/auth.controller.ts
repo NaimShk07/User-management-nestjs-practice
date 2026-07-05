@@ -1,6 +1,15 @@
-import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler'; // lets us set a custom limit per route
+import { AuthGuard } from '@nestjs/passport'; // used for Google OAuth guard
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -46,8 +55,30 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    // req['user'] was set by JwtAuthGuard — it contains { id, email, role }
-    const userId = req['user'].id;
+    // Cast req to any to safely read req.user without TypeScript complaining
+    const userId = (req as any).user.id;
     return this.authService.logout(userId, res);
+  }
+
+  // ── GET /auth/google ─────────────────────────────────────────────────────────
+  // Public — visiting this URL in a browser starts the Google login flow.
+  // Passport reads the GoogleStrategy config and redirects to Google's login page.
+  // The user never sees code here — they are instantly redirected to Google.
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  googleAuth() {
+    // Passport handles the redirect — this method body never actually runs
+  }
+
+  // ── GET /auth/google/callback ─────────────────────────────────────────────────
+  // Public — Google redirects the browser here after the user grants permission.
+  // AuthGuard('google') runs GoogleStrategy.validate() which sets req.user.
+  // We then generate JWT tokens and redirect the user to the frontend.
+  // Note: We use @Res() without passthrough because we are doing res.redirect(),
+  //       not returning data — so the ResponseInterceptor should NOT wrap this.
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  googleCallback(@Req() req: Request, @Res() res: Response) {
+    return this.authService.googleLogin(req['user'], res);
   }
 }
