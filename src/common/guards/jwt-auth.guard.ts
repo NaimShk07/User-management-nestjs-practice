@@ -1,49 +1,40 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
+// A Guard decides: can this request pass through? (true = yes, false = blocked)
+// This guard checks if the request has a valid JWT token in the Authorization header.
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly reflector: Reflector,
-  ) {}
+  constructor(private jwtService: JwtService) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // Allow routes decorated with @Public()
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) return true;
-
+    // Get the incoming HTTP request
     const request = context.switchToHttp().getRequest<Request>();
-    const token = this.extractBearerToken(request);
+
+    // Read the Authorization header  e.g. "Bearer eyJhbGci..."
+    const authHeader = request.headers['authorization'];
+
+    // If there is no Authorization header, block the request
+    if (!authHeader) {
+      throw new UnauthorizedException('Please login first. No token provided.');
+    }
+
+    // The token comes after "Bearer ", so we split and take the second part
+    const token = authHeader.split(' ')[1];
 
     if (!token) {
-      throw new UnauthorizedException('No bearer token provided');
+      throw new UnauthorizedException('Token is missing after "Bearer".');
     }
 
+    // Verify the token using the JWT secret
     try {
-      const payload = this.jwtService.verify(token);
-      // Attach decoded payload to request so downstream handlers can use it
-      request['user'] = payload;
-      return true;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired token');
+      const decoded = this.jwtService.verify(token);
+      // Attach the decoded user info to the request so controllers can use it later
+      request['user'] = decoded;
+      return true; // allow the request
+    } catch (error) {
+      throw new UnauthorizedException('Token is invalid or has expired.');
     }
-  }
-
-  private extractBearerToken(request: Request): string | null {
-    const authHeader = request.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-    return authHeader.slice(7); // remove "Bearer " prefix
   }
 }

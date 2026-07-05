@@ -1,35 +1,24 @@
 import { ValidationPipe } from '@nestjs/common';
-import { NestFactory, Reflector } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
-import { JwtService } from '@nestjs/jwt';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const reflector = app.get(Reflector);
-  const jwtService = app.get(JwtService);
+  // ValidationPipe checks incoming request bodies against our DTOs
+  // whitelist: true  → strips out any fields not in the DTO
+  // transform: true  → converts types automatically (e.g. "5" → 5)
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  // ── Global Guard ── protect all routes by default; use @Public() to opt-out
-  app.useGlobalGuards(new JwtAuthGuard(jwtService, reflector));
+  // ResponseInterceptor wraps every success response in { statusCode, message, data }
+  app.useGlobalInterceptors(new ResponseInterceptor());
 
-  // ── Global Interceptor ── wrap all success responses in { statusCode, message, data }
-  app.useGlobalInterceptors(new ResponseInterceptor(reflector));
-
-  // ── Global Exception Filter ── structured error responses
+  // HttpExceptionFilter gives a consistent shape to every error response
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // ── Global Validation Pipe ──
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
   await app.listen(process.env.PORT ?? 3000);
+  console.log(`🚀 Server running on http://localhost:${process.env.PORT ?? 3000}`);
 }
 bootstrap();

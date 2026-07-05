@@ -1,143 +1,141 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
-import { RowDataPacket } from 'mysql2';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User, UserRole } from './entities/user.entity';
 
-interface UserRow extends User, RowDataPacket {}
-
+// A Service holds your business logic (the real work).
+// Controllers receive requests, Services do the actual work.
 @Injectable()
 export class UsersService implements OnModuleInit {
-  constructor(private readonly db: DatabaseService) {}
+  // Inject DatabaseService so we can run SQL queries
+  constructor(private db: DatabaseService) {}
 
-  /** Auto-create the users table on startup if it doesn't exist */
+  // This runs automatically when the app starts.
+  // It creates the users table if it doesn't already exist.
   async onModuleInit() {
     await this.db.execute(`
       CREATE TABLE IF NOT EXISTS users (
-        id           INT AUTO_INCREMENT PRIMARY KEY,
-        name         VARCHAR(100)                        NOT NULL,
-        email        VARCHAR(150)                        NOT NULL UNIQUE,
-        password     VARCHAR(255)                        NOT NULL,
-        role         ENUM('admin', 'user')               NOT NULL DEFAULT 'user',
-        refresh_token TEXT                               NULL,
-        created_at   TIMESTAMP                           NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at   TIMESTAMP                           NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        name          VARCHAR(100)         NOT NULL,
+        email         VARCHAR(150)         NOT NULL UNIQUE,
+        password      VARCHAR(255)         NOT NULL,
+        role          ENUM('admin','user') NOT NULL DEFAULT 'user',
+        refresh_token TEXT                 NULL,
+        created_at    TIMESTAMP            NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TIMESTAMP            NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
   }
 
-  // ─── CREATE ────────────────────────────────────────────────────────────────
+  // ── CREATE a new user ─────────────────────────────────────────────────────
 
-  async create(dto: CreateUserDto): Promise<User> {
-    // Duplicate email check
-    const [existing] = await this.db.query<UserRow>(
+  async create(dto: CreateUserDto) {
+    // First check: does a user with this email already exist?
+    const existing = await this.db.query(
       'SELECT id FROM users WHERE email = ?',
       [dto.email],
     );
-    if (existing) {
-      throw new ConflictException(
-        `User with email "${dto.email}" already exists`,
-      );
+
+    if (existing.length > 0) {
+      // 409 Conflict — email must be unique
+      throw new ConflictException(`Email "${dto.email}" is already registered`);
     }
 
-    const role = dto.role ?? UserRole.USER;
+    // Set default role to 'user' if not provided
+    const role = dto.role ?? 'user';
+
+    // Insert the new user and get the auto-generated id back
     const result = await this.db.execute(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
       [dto.name, dto.email, dto.password, role],
     );
 
+    // Fetch and return the newly created user
     return this.findOne(result.insertId);
   }
 
-  // ─── READ ALL ──────────────────────────────────────────────────────────────
+  // ── GET all users ─────────────────────────────────────────────────────────
 
-  async findAll(): Promise<User[]> {
-    return this.db.query<UserRow>('SELECT * FROM users ORDER BY id ASC');
+  async findAll() {
+    return this.db.query('SELECT * FROM users ORDER BY id ASC');
   }
 
-  // ─── READ ONE ──────────────────────────────────────────────────────────────
+  // ── GET one user by id ────────────────────────────────────────────────────
 
-  async findOne(id: number): Promise<User> {
-    const [user] = await this.db.query<UserRow>(
+  async findOne(id: number) {
+    // query() returns an array — we take the first element
+    const [user] = await this.db.query(
       'SELECT * FROM users WHERE id = ?',
       [id],
     );
+
     if (!user) {
+      // 404 Not Found
       throw new NotFoundException(`User with id ${id} not found`);
     }
+
     return user;
   }
 
-  // ─── FIND BY EMAIL ─────────────────────────────────────────────────────────
+  // ── GET one user by email (used during login) ─────────────────────────────
 
-  async findByEmail(email: string): Promise<User | null> {
-    const [user] = await this.db.query<UserRow>(
+  async findByEmail(email: string) {
+    const [user] = await this.db.query(
       'SELECT * FROM users WHERE email = ?',
       [email],
     );
-    return user ?? null;
+    return user ?? null; // return null if not found
   }
 
-  // ─── UPDATE ────────────────────────────────────────────────────────────────
+  // ── UPDATE a user ─────────────────────────────────────────────────────────
 
-  async update(id: number, dto: UpdateUserDto): Promise<User> {
-    await this.findOne(id); // throws 404 if not found
+  async update(id: number, dto: UpdateUserDto) {
+    // Make sure the user exists first (throws 404 if not)
+    await this.findOne(id);
 
-    // Build SET clause dynamically from provided fields only
-    const allowedFields: (keyof UpdateUserDto)[] = [
-      'name',
-      'email',
-      'password',
-      'role',
-    ];
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
+    // Build the SET part of the query dynamically.
+    // We only update the fields that were actually sent in the request.
+    const fields: string[] = [];  // e.g. ['name = ?', 'email = ?']
+    const values: any[]    = [];  // e.g. ['John', 'john@example.com']
 
-    for (const field of allowedFields) {
-      if (dto[field] !== undefined) {
-        setClauses.push(`${field} = ?`);
-        params.push(dto[field]);
-      }
-    }
+    if (dto.name     !== undefined) { fields.push('name = ?');     values.push(dto.name);     }
+    if (dto.email    !== undefined) { fields.push('email = ?');    values.push(dto.email);    }
+    if (dto.password !== undefined) { fields.push('password = ?'); values.push(dto.password); }
+    if (dto.role     !== undefined) { fields.push('role = ?');     values.push(dto.role);     }
 
-    if (setClauses.length === 0) {
-      // Nothing to update — return existing record
+    // If nothing was sent, just return the user as-is
+    if (fields.length === 0) {
       return this.findOne(id);
     }
 
-    params.push(id);
+    values.push(id); // the WHERE id = ?
     await this.db.execute(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
-      params,
+      `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+      values,
     );
 
+    // Return the updated user
     return this.findOne(id);
   }
 
-  // ─── UPDATE REFRESH TOKEN ──────────────────────────────────────────────────
+  // ── UPDATE refresh token (called after login/logout) ──────────────────────
 
-  async updateRefreshToken(
-    id: number,
-    refreshToken: string | null,
-  ): Promise<void> {
-    await this.findOne(id); // throws 404 if not found
+  async updateRefreshToken(id: number, refreshToken: string | null) {
+    await this.findOne(id); // throws 404 if user doesn't exist
+
     await this.db.execute(
       'UPDATE users SET refresh_token = ? WHERE id = ?',
       [refreshToken, id],
     );
   }
 
-  // ─── DELETE ────────────────────────────────────────────────────────────────
+  // ── DELETE a user ─────────────────────────────────────────────────────────
 
-  async remove(id: number): Promise<{ message: string }> {
-    await this.findOne(id); // throws 404 if not found
+  async remove(id: number) {
+    await this.findOne(id); // throws 404 if user doesn't exist
+
     await this.db.execute('DELETE FROM users WHERE id = ?', [id]);
-    return { message: `User with id ${id} successfully deleted` };
+
+    return { message: `User ${id} deleted successfully` };
   }
 }

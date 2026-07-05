@@ -1,48 +1,44 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+// @Catch() with no arguments means: catch ALL errors (not just HttpExceptions)
+// An ExceptionFilter lets you control what gets sent back when an error occurs.
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(HttpExceptionFilter.name);
-
-  catch(exception: unknown, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    // Check if it's a known NestJS HTTP error (404, 400, 401, etc.)
+    // or an unexpected server crash
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | string[] = 'Internal server error';
-    let error = 'Internal Server Error';
+    let message = 'Something went wrong on the server';
 
     if (exception instanceof HttpException) {
+      // Known error — e.g. NotFoundException, UnauthorizedException
       statusCode = exception.getStatus();
-      const exceptionResponse = exception.getResponse();
 
-      if (typeof exceptionResponse === 'string') {
-        message = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const res = exceptionResponse as Record<string, unknown>;
-        message = (res.message as string | string[]) ?? exception.message;
-        error = (res.error as string) ?? exception.name;
+      // getResponse() can return a string or an object — handle both cases
+      const exceptionBody = exception.getResponse();
+      if (typeof exceptionBody === 'string') {
+        message = exceptionBody;
+      } else {
+        // NestJS validation errors return { message: [...], error: '...' }
+        message = (exceptionBody as any).message ?? exception.message;
       }
     } else if (exception instanceof Error) {
+      // Unexpected error (e.g. database crash)
       message = exception.message;
-      this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+      console.error('Unexpected error:', exception);
     }
 
+    // Send a consistent error response every time
     response.status(statusCode).json({
       statusCode,
-      error,
       message,
+      path: request.url,          // which route caused the error
       timestamp: new Date().toISOString(),
-      path: request.url,
     });
   }
 }
